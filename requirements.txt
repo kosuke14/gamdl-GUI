@@ -10,4 +10,3 @@ pyyaml
 yt-dlp
 selenium
 requests
-pathlib
