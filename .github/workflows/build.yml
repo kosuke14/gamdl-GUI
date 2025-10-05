@@ -1,93 +1,124 @@
-name: build-nuitka
+name: Build
 
-# Trigger the workflow on pushes and pull requests to the default branch.
 on:
-  push:
-    branches: [master, main]
-  pull_request:
-    branches: [master, main]
+  workflow_dispatch:
+    inputs:
+      upload_to_release:
+        description: "Upload artifacts as draft release?"
+        required: true
+        type: boolean
+        default: false
 
 jobs:
   build:
-    # Run the build on both Windows and macOS to produce native binaries.
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [windows-latest, macos-latest]
 
     steps:
-      # Step 1: Check out the repository.
-      - name: Check out code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Step 2: Set up Python.  The repository does not pin a Python version,
-      # so use a reasonably recent release (3.11) that Nuitka supports.
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
-      # Step 3: Install build dependencies.  Upgrade pip, install Nuitka,
-      # and then install the packages listed in requirements.txt.
-      - name: Install Python dependencies and Nuitka
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install nuitka
-          python -m pip install -r requirements.txt
+          pip install pyinstaller requests tqdm
+          pip install -r requirements.txt
 
-      # Step 4: On macOS, the helper binaries are not executable by default.
-      # Mark them as executable before packaging.
-      - name: Make helper executables executable on macOS
-        if: matrix.os == 'macos-latest'
+      - name: Prepare binary directory
+        run: mkdir binary
+
+      # ---------- WINDOWS ----------
+      - name: Download Windows N_m3u8DL-RE
+        if: matrix.os == 'windows-latest'
+        shell: bash
         run: |
+          url=$(curl -sL https://api.github.com/repos/nilaoda/N_m3u8DL-RE/releases/latest \
+            | grep -Eo 'https://[^"]*N_m3u8DL-RE_[^"]*_win-x64_[^"]*.zip' | head -n 1)
+          echo "Downloading $url"
+          curl -L "$url" -o re.zip
+          unzip -j re.zip -d binary
+          mv binary/N_m3u8DL-RE_*.exe binary/windows-N_m3u8DL-RE.exe
+
+      - name: Download Windows ffmpeg
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        run: |
+          url=$(curl -sL https://api.github.com/repos/GyanD/codexffmpeg/releases/latest \
+            | grep -Eo 'https://[^"]*ffmpeg-[^"]*-essentials_build.7z' | head -n 1)
+          echo "Downloading $url"
+          curl -L "$url" -o ffmpeg.7z
+          7z x ffmpeg.7z -obuild
+          cp build/*/bin/ffmpeg.exe binary/windows-ffmpeg.exe
+
+      - name: Download Windows mp4decrypt
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        run: |
+          url="https://www.bok.net/Bento4/binaries/Bento4-SDK-1-6-0-641.x86_64-microsoft-win32.zip"
+          curl -L "$url" -o bento.zip
+          unzip -j bento.zip '*/bin/mp4decrypt.exe' -d binary
+          mv binary/mp4decrypt.exe binary/windows-mp4decrypt.exe
+
+      # ---------- macOS ----------
+      - name: Download macOS N_m3u8DL-RE
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        run: |
+          url=$(curl -sL https://api.github.com/repos/nilaoda/N_m3u8DL-RE/releases/latest \
+            | grep -Eo 'https://[^"]*N_m3u8DL-RE_[^"]*_osx-x64_[^"]*.tar.gz' | head -n 1)
+          echo "Downloading $url"
+          curl -L "$url" -o re.tar.gz
+          tar -xzf re.tar.gz -C binary
+          mv binary/N_m3u8DL-RE_* binary/mac-N_m3u8DL-RE
+
+      - name: Download macOS ffmpeg
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        run: |
+          url=$(curl -sL https://evermeet.cx/ffmpeg/info/ffmpeg/6.0 | grep -Eo '"download": *"[^"]*"' | head -n 1 | sed 's/"download": *"//' | sed 's/"//')
+          echo "Downloading $url"
+          curl -L "$url" -o ffmpeg.zip
+          unzip -j ffmpeg.zip -d binary
+          mv binary/ffmpeg binary/mac-ffmpeg
           chmod +x binary/mac-ffmpeg
+
+      - name: Download macOS mp4decrypt
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        run: |
+          url="https://www.bok.net/Bento4/binaries/Bento4-SDK-1-6-0-641.universal-apple-macosx.zip"
+          curl -L "$url" -o bento.zip
+          unzip -j bento.zip '*/bin/mp4decrypt' -d binary
+          mv binary/mp4decrypt binary/mac-mp4decrypt
           chmod +x binary/mac-mp4decrypt
-          chmod +x binary/mac-N_m3u8DL-RE
 
-      # Step 5: Build the standalone one‑file executable with Nuitka.  Use
-      # `--include-data-files` to embed the platform‑specific helper
-      # executables inside the package so that `resource_path` finds them
-      # through `_MEIPASS`.  For Windows, escape backslashes with a second
-      # backslash so they survive shell parsing.  Specify an explicit
-      # output filename for easier artifact naming.
-      - name: Build with Nuitka for Windows
-        if: matrix.os == 'windows-latest'
-        shell: bash
+      # ---------- BUILD ----------
+      - name: Build with PyInstaller
         run: |
-          python -m nuitka \
-            --follow-imports \
-            --onefile \
-            --include-data-files=binary\\windows-ffmpeg.exe=binary\\windows-ffmpeg.exe \
-            --include-data-files=binary\\windows-mp4decrypt.exe=binary\\windows-mp4decrypt.exe \
-            --include-data-files=binary\\windows-N_m3u8DL-RE.exe=binary\\windows-N_m3u8DL-RE.exe \
-            --output-filename=gamdl_gui_win.exe \
-            main.py
+          pyinstaller main.py --onefile --noconsole --add-data "binary${{ matrix.os == 'windows-latest' && '\\\\*;binary' || ':binary' }}"
 
-      - name: Build with Nuitka for macOS
-        if: matrix.os == 'macos-latest'
-        shell: bash
-        run: |
-          python -m nuitka \
-            --follow-imports \
-            --onefile \
-            --include-data-files=binary/mac-ffmpeg=binary/mac-ffmpeg \
-            --include-data-files=binary/mac-mp4decrypt=binary/mac-mp4decrypt \
-            --include-data-files=binary/mac-N_m3u8DL-RE=binary/mac-N_m3u8DL-RE \
-            --output-filename=gamdl_gui_mac \
-            main.py
-
-      # Step 6: Upload the built executable as an artifact.  Use a distinct
-      # name per platform.
-      - name: Upload Windows artifact
-        if: matrix.os == 'windows-latest'
+      # ---------- UPLOAD ----------
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: gamdl_gui_windows
-          path: gamdl_gui_win.exe
+          name: gamdl_gui_${{ matrix.os }}
+          path: dist/*
 
-      - name: Upload macOS artifact
-        if: matrix.os == 'macos-latest'
-        uses: actions/upload-artifact@v4
+      # ---------- OPTIONAL RELEASE ----------
+      - name: Create Draft Release
+        if: ${{ github.event.inputs.upload_to_release == 'true' }}
+        uses: softprops/action-gh-release@v2
         with:
-          name: gamdl_gui_mac
-          path: gamdl_gui_mac
+          tag_name: build-${{ github.run_id }}
+          name: "Draft Build ${{ github.run_id }}"
+          draft: true
+          files: dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
