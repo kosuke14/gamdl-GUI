@@ -50,7 +50,6 @@ jobs:
           echo "Downloading $url"
           curl -L "$url" -o re.zip
           unzip -j re.zip -d binary
-          mv binary/N_m3u8DL-RE.exe
 
       - name: Download Windows ffmpeg
         if: matrix.os == 'windows-latest'
