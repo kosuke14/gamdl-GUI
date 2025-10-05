@@ -1,8 +1,6 @@
 output/
+dist/
 *.wvd
 *.txt
 *.json
 AppleMusic/
-*.pyc
-build/
-dist/
