@@ -32,7 +32,13 @@ jobs:
           pip install -r requirements.txt
 
       - name: Prepare binary directory
-        run: mkdir binary
+        shell: bash
+        run: |
+          # Clean up any existing binary folder before recreating
+          if [ -d "binary" ]; then
+            rm -rf binary
+          fi
+          mkdir -p binary
 
       # ---------- WINDOWS ----------
       - name: Download Windows N_m3u8DL-RE
