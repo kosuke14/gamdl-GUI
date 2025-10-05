@@ -2,10 +2,10 @@
 
 
 a = Analysis(
-    ['E:/Python/gamdl-gui/main.py'],
+    ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[('C:/Users/okmnj/AppData/Local/Programs/Python/Python312/Lib/site-packages/customtkinter', 'customtkinter/'), ('E:/Python/gamdl-gui/binary', 'binary/'), ('E:/Python/gamdl-gui/gamdl', 'gamdl/'), ('E:/Python/gamdl-gui/device.wvd', '.')],
+    datas=[('binary/', 'binary/')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -34,5 +34,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['C:\\Users\\okmnj\\Downloads\\gamdl-downloder.ico'],
+    icon=['app.ico'],
 )
