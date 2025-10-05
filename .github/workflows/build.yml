@@ -14,7 +14,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [windows-latest, macos-latest]
+        os: [windows-latest]
 
     steps:
       - name: Checkout repository
@@ -39,39 +39,6 @@ jobs:
             rm -rf binary
           fi
           mkdir -p binary
-
-      # ---------- macOS ----------
-      - name: Download macOS N_m3u8DL-RE
-        if: matrix.os == 'macos-latest'
-        shell: bash
-        run: |
-          url=$(curl -sL https://api.github.com/repos/nilaoda/N_m3u8DL-RE/releases/latest \
-            | grep -Eo 'https://[^"]*N_m3u8DL-RE_[^"]*_osx-x64_[^"]*.tar.gz' | head -n 1)
-          echo "Downloading $url"
-          curl -L "$url" -o re.tar.gz
-          tar -xzf re.tar.gz -C binary
-          mv binary/N_m3u8DL-RE binary/mac-N_m3u8DL-RE
-
-      - name: Download macOS ffmpeg
-        if: matrix.os == 'macos-latest'
-        shell: bash
-        run: |
-          url=$(curl -sL https://evermeet.cx/ffmpeg/info/ffmpeg/6.0 | grep -Eo '"download": *"[^"]*"' | head -n 1 | sed 's/"download": *"//' | sed 's/"//')
-          echo "Downloading $url"
-          curl -L "$url" -o ffmpeg.zip
-          unzip -j ffmpeg.zip -d binary
-          mv binary/ffmpeg binary/mac-ffmpeg
-          chmod +x binary/mac-ffmpeg
-
-      - name: Download macOS mp4decrypt
-        if: matrix.os == 'macos-latest'
-        shell: bash
-        run: |
-          url="https://www.bok.net/Bento4/binaries/Bento4-SDK-1-6-0-641.universal-apple-macosx.zip"
-          curl -L "$url" -o bento.zip
-          unzip -j bento.zip '*/bin/mp4decrypt' -d binary
-          mv binary/mp4decrypt binary/mac-mp4decrypt
-          chmod +x binary/mac-mp4decrypt
 
       # ---------- WINDOWS ----------
       - name: Download Windows N_m3u8DL-RE
