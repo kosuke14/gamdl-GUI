@@ -1,0 +1,93 @@
+name: build-nuitka
+
+# Trigger the workflow on pushes and pull requests to the default branch.
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  build:
+    # Run the build on both Windows and macOS to produce native binaries.
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest]
+
+    steps:
+      # Step 1: Check out the repository.
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      # Step 2: Set up Python.  The repository does not pin a Python version,
+      # so use a reasonably recent release (3.11) that Nuitka supports.
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      # Step 3: Install build dependencies.  Upgrade pip, install Nuitka,
+      # and then install the packages listed in requirements.txt.
+      - name: Install Python dependencies and Nuitka
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install nuitka
+          python -m pip install -r requirements.txt
+
+      # Step 4: On macOS, the helper binaries are not executable by default.
+      # Mark them as executable before packaging.
+      - name: Make helper executables executable on macOS
+        if: matrix.os == 'macos-latest'
+        run: |
+          chmod +x binary/mac-ffmpeg
+          chmod +x binary/mac-mp4decrypt
+          chmod +x binary/mac-N_m3u8DL-RE
+
+      # Step 5: Build the standalone one‑file executable with Nuitka.  Use
+      # `--include-data-files` to embed the platform‑specific helper
+      # executables inside the package so that `resource_path` finds them
+      # through `_MEIPASS`.  For Windows, escape backslashes with a second
+      # backslash so they survive shell parsing.  Specify an explicit
+      # output filename for easier artifact naming.
+      - name: Build with Nuitka for Windows
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        run: |
+          python -m nuitka \
+            --follow-imports \
+            --onefile \
+            --include-data-files=binary\\windows-ffmpeg.exe=binary\\windows-ffmpeg.exe \
+            --include-data-files=binary\\windows-mp4decrypt.exe=binary\\windows-mp4decrypt.exe \
+            --include-data-files=binary\\windows-N_m3u8DL-RE.exe=binary\\windows-N_m3u8DL-RE.exe \
+            --output-filename=gamdl_gui_win.exe \
+            main.py
+
+      - name: Build with Nuitka for macOS
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        run: |
+          python -m nuitka \
+            --follow-imports \
+            --onefile \
+            --include-data-files=binary/mac-ffmpeg=binary/mac-ffmpeg \
+            --include-data-files=binary/mac-mp4decrypt=binary/mac-mp4decrypt \
+            --include-data-files=binary/mac-N_m3u8DL-RE=binary/mac-N_m3u8DL-RE \
+            --output-filename=gamdl_gui_mac \
+            main.py
+
+      # Step 6: Upload the built executable as an artifact.  Use a distinct
+      # name per platform.
+      - name: Upload Windows artifact
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gamdl_gui_windows
+          path: gamdl_gui_win.exe
+
+      - name: Upload macOS artifact
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gamdl_gui_mac
+          path: gamdl_gui_mac
